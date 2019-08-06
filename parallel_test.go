@@ -9,8 +9,8 @@ import (
 
 // MARK: Helpers
 
-const vectorLength int = 10000
-const fftLength int = 8
+const vectorLength int = 100000
+const fftLength int = 256
 
 // newVector creates and returns a new vector with length
 // defined by fftLength.
@@ -174,12 +174,10 @@ func BenchmarkSum_11(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
 
-	p := NewOptimizedProcess(5)
+	p := NewOptimizedProcess(20, 0.001)
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		// log.Println("finished")
 	}
 }

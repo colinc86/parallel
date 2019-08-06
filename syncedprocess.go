@@ -43,6 +43,12 @@ func (p *SyncedProcess) Execute(iterations int, operation Operation) {
 	p.group.Wait()
 }
 
+// NumRoutines returns the number of routines that the synced processes was
+// initialized with.
+func (p *SyncedProcess) NumRoutines() int {
+	return p.numRoutines
+}
+
 // MARK: Private methods
 
 func (p *SyncedProcess) runRoutine(iterations int, operation Operation) {

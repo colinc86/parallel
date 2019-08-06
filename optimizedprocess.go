@@ -1,24 +1,18 @@
 package parallel
 
 import (
-	"log"
 	"sync"
 	"time"
-)
-
-type routineAction int
-
-const (
-	routineActionNone   routineAction = 0
-	routineActionAdd    routineAction = 1
-	routineActionRemove routineAction = 2
 )
 
 // OptimizedProcess types execute a specified number of operations on a given number of
 // goroutines.
 type OptimizedProcess struct {
 	// The number of iterations between optimizations.
-	OptimizationInterval int
+	optimizationInterval int
+
+	// The cutoff threshold for adding or removing goroutines.
+	optimizationThreshold float64
 
 	// The number of goroutines the process should use when divvying up
 	// operations.
@@ -37,8 +31,8 @@ type OptimizedProcess struct {
 	// A mutex to protect against simultaneous read/write to count.
 	countMutex sync.Mutex
 
-	// The last report collected during optimization.
-	lastReport float64
+	// The last error collected during optimization.
+	previousError float64
 
 	// The time of the last report collected during optimization.
 	lastReportTime time.Time
@@ -51,9 +45,10 @@ type OptimizedProcess struct {
 
 // NewOptimizedProcess creates and returns a new parallel process with the specified
 // number of goroutines.
-func NewOptimizedProcess(interval int) *OptimizedProcess {
+func NewOptimizedProcess(interval int, threshold float64) *OptimizedProcess {
 	return &OptimizedProcess{
-		OptimizationInterval: interval,
+		optimizationInterval:  interval,
+		optimizationThreshold: threshold,
 	}
 }
 
@@ -68,26 +63,15 @@ func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
 	go p.runRoutine(iterations, operation)
 
 	p.group.Wait()
-	log.Println(rCount)
 }
 
 // MARK: Private methods
 
 // reset resets all of the process' properties to their initial state.
 func (p *OptimizedProcess) reset() {
-	totalError = 0.0
-	previousError = 0.0
-	baselineDelta = 0.0
-	added = 0
-	removed = 0
-	max = 0
-	rCount = nil
-	changed = false
-	wasPositive = true
-
 	p.numRoutines = 1
 	p.count = 0
-	p.lastReport = 0.0
+	p.previousError = 0.0
 	p.lastReportTime = time.Now()
 }
 
@@ -120,23 +104,18 @@ func (p *OptimizedProcess) nextCount() int {
 // optimizeNumRoutines optimized the number of routines to use for the parallel
 // operation.
 func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, operation Operation) bool {
-	if iteration%p.OptimizationInterval != 0 || iteration == 0 {
+	if iteration%p.optimizationInterval != 0 || iteration == 0 {
 		return false
 	}
 
-	defer p.updateRCount()
 	p.group.Add(1)
 
 	switch p.nextAction(iteration) {
 	case routineActionNone:
 		p.group.Done()
 	case routineActionAdd:
-		added++
 		p.numRoutinesMutex.Lock()
 		p.numRoutines++
-		if p.numRoutines > max {
-			max = p.numRoutines
-		}
 		p.numRoutinesMutex.Unlock()
 		go p.runRoutine(iterations, operation)
 	case routineActionRemove:
@@ -145,7 +124,6 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 			break
 		}
 
-		removed++
 		p.numRoutinesMutex.Lock()
 		p.numRoutines--
 		p.numRoutinesMutex.Unlock()
@@ -156,45 +134,27 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 	return false
 }
 
-func (p *OptimizedProcess) updateRCount() {
-	p.numRoutinesMutex.Lock()
-	rCount = append(rCount, p.numRoutines)
-	p.numRoutinesMutex.Unlock()
-}
-
-var totalError float64
-var previousError float64
-var baselineDelta float64
-var previousDelta float64
-
-var added int
-var removed int
-var max int
-var rCount []int
-var changed bool
-var wasPositive bool
-
 // nextAction gets the next action the optimize method should use when
-// optimizing the number of goroutines to use.
+// optimizing the number of goroutines.
 func (p *OptimizedProcess) nextAction(iteration int) routineAction {
 	p.reportMutex.Lock()
 	defer p.reportMutex.Unlock()
 
 	now := time.Now()
-	delta := now.Sub(p.lastReportTime).Seconds()
+	E := now.Sub(p.lastReportTime).Seconds()
 	p.lastReportTime = now
 
-	if iteration == p.OptimizationInterval {
-		previousDelta = delta
-		return routineActionAdd
+	if iteration == p.optimizationInterval {
+		p.previousError = E
+		return routineActionNone
 	}
 
-	e := delta - previousDelta
-	log.Println(e)
-	cutoff := 0.01
-	if e < -cutoff {
+	diff := (p.previousError - E) / p.previousError
+	p.previousError = E
+
+	if diff > p.optimizationThreshold {
 		return routineActionAdd
-	} else if e > cutoff {
+	} else if diff < -p.optimizationThreshold {
 		return routineActionRemove
 	}
 

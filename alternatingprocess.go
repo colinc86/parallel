@@ -26,7 +26,8 @@ func NewAlternatingProcess(numRoutines int) *AlternatingProcess {
 
 // MARK: Public methods
 
-// Execute executes the parallel process for the specified number of operations.
+// Execute executes a set of operations in alternating order until all
+// operations have completed.
 func (p *AlternatingProcess) Execute(iterations int, operation Operation) {
 	p.group.Add(p.numRoutines)
 	for n := 0; n < p.numRoutines; n++ {
@@ -34,6 +35,12 @@ func (p *AlternatingProcess) Execute(iterations int, operation Operation) {
 	}
 
 	p.group.Wait()
+}
+
+// NumRoutines returns the number of routines that the alternating processes was
+// initialized with.
+func (p *AlternatingProcess) NumRoutines() int {
+	return p.numRoutines
 }
 
 // MARK: Private methods
