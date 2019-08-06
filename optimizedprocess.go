@@ -5,22 +5,14 @@ import (
 	"time"
 )
 
-type routineAction int
-
-const (
-	routineActionNone   routineAction = 0
-	routineActionAdd    routineAction = 1
-	routineActionRemove routineAction = 2
-)
-
 // OptimizedProcess types execute a specified number of operations on a given number of
 // goroutines.
 type OptimizedProcess struct {
-	// The process' channel to be called when all operations complete.
-	C chan struct{}
-
 	// The number of iterations between optimizations.
-	OptimizationInterval int
+	optimizationInterval int
+
+	// The cutoff threshold for adding or removing goroutines.
+	optimizationThreshold float64
 
 	// The number of goroutines the process should use when divvying up
 	// operations.
@@ -39,8 +31,8 @@ type OptimizedProcess struct {
 	// A mutex to protect against simultaneous read/write to count.
 	countMutex sync.Mutex
 
-	// The last report collected during optimization.
-	lastReport float64
+	// The last error collected during optimization.
+	previousError float64
 
 	// The time of the last report collected during optimization.
 	lastReportTime time.Time
@@ -53,10 +45,10 @@ type OptimizedProcess struct {
 
 // NewOptimizedProcess creates and returns a new parallel process with the specified
 // number of goroutines.
-func NewOptimizedProcess(interval int) *OptimizedProcess {
+func NewOptimizedProcess(interval int, threshold float64) *OptimizedProcess {
 	return &OptimizedProcess{
-		C:                    make(chan struct{}, 1),
-		OptimizationInterval: interval,
+		optimizationInterval:  interval,
+		optimizationThreshold: threshold,
 	}
 }
 
@@ -71,7 +63,6 @@ func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
 	go p.runRoutine(iterations, operation)
 
 	p.group.Wait()
-	p.C <- finishedProcess{}
 }
 
 // MARK: Private methods
@@ -80,7 +71,7 @@ func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
 func (p *OptimizedProcess) reset() {
 	p.numRoutines = 1
 	p.count = 0
-	p.lastReport = 0.0
+	p.previousError = 0.0
 	p.lastReportTime = time.Now()
 }
 
@@ -113,53 +104,57 @@ func (p *OptimizedProcess) nextCount() int {
 // optimizeNumRoutines optimized the number of routines to use for the parallel
 // operation.
 func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, operation Operation) bool {
-	if iteration%p.OptimizationInterval == 0 {
-		p.group.Add(1)
+	if iteration%p.optimizationInterval != 0 || iteration == 0 {
+		return false
+	}
 
-		switch p.nextAction() {
-		case routineActionNone:
+	p.group.Add(1)
+
+	switch p.nextAction(iteration) {
+	case routineActionNone:
+		p.group.Done()
+	case routineActionAdd:
+		p.numRoutinesMutex.Lock()
+		p.numRoutines++
+		p.numRoutinesMutex.Unlock()
+		go p.runRoutine(iterations, operation)
+	case routineActionRemove:
+		if p.numRoutines <= 1 {
 			p.group.Done()
-		case routineActionAdd:
-			p.numRoutinesMutex.Lock()
-			p.numRoutines++
-			p.numRoutinesMutex.Unlock()
-			go p.runRoutine(iterations, operation)
-		case routineActionRemove:
-			p.numRoutinesMutex.Lock()
-			p.numRoutines--
-			p.numRoutinesMutex.Unlock()
-			p.group.Done()
-			return true
+			break
 		}
+
+		p.numRoutinesMutex.Lock()
+		p.numRoutines--
+		p.numRoutinesMutex.Unlock()
+		p.group.Done()
+		return true
 	}
 
 	return false
 }
 
 // nextAction gets the next action the optimize method should use when
-// optimizing the number of goroutines to use.
-func (p *OptimizedProcess) nextAction() routineAction {
+// optimizing the number of goroutines.
+func (p *OptimizedProcess) nextAction(iteration int) routineAction {
 	p.reportMutex.Lock()
 	defer p.reportMutex.Unlock()
 
 	now := time.Now()
-	n := now.Sub(p.lastReportTime).Nanoseconds()
+	E := now.Sub(p.lastReportTime).Seconds()
 	p.lastReportTime = now
-	r := float64(p.OptimizationInterval) / float64(n) * float64(time.Second.Nanoseconds())
 
-	if p.lastReport == 0.0 {
-		p.lastReport = r
+	if iteration == p.optimizationInterval {
+		p.previousError = E
 		return routineActionNone
 	}
 
-	setLastReport := func() {
-		p.lastReport = r
-	}
-	defer setLastReport()
+	diff := (p.previousError - E) / p.previousError
+	p.previousError = E
 
-	if r > p.lastReport*1.25 {
+	if diff > p.optimizationThreshold {
 		return routineActionAdd
-	} else if r < p.lastReport*0.75 && p.numRoutines > 1 {
+	} else if diff < -p.optimizationThreshold {
 		return routineActionRemove
 	}
 
