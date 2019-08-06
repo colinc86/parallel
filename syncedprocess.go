@@ -5,9 +5,6 @@ import "sync"
 // SyncedProcess types execute a specified number of operations on a given number of
 // goroutines.
 type SyncedProcess struct {
-	// The process' channel to be called when all operations complete.
-	C chan struct{}
-
 	// The number of goroutines the process should use when divvying up
 	// operations.
 	numRoutines int
@@ -29,7 +26,6 @@ type SyncedProcess struct {
 // number of goroutines.
 func NewSyncedProcess(numRoutines int) *SyncedProcess {
 	return &SyncedProcess{
-		C:           make(chan struct{}, 1),
 		numRoutines: numRoutines,
 	}
 }
@@ -45,7 +41,6 @@ func (p *SyncedProcess) Execute(iterations int, operation Operation) {
 	}
 
 	p.group.Wait()
-	p.C <- finishedProcess{}
 }
 
 // MARK: Private methods

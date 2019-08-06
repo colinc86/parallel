@@ -9,7 +9,7 @@ import (
 
 // MARK: Helpers
 
-const vectorLength int = 1000000
+const vectorLength int = 10000
 const fftLength int = 8
 
 // newVector creates and returns a new vector with length
@@ -85,56 +85,48 @@ func BenchmarkSum_03(b *testing.B) {
 func BenchmarkSum_04(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
-	p := NewProcess(1)
+	p := NewAlternatingProcess(1)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		<-p.C
 	}
 }
 
 func BenchmarkSum_05(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
-	p := NewProcess(2)
+	p := NewAlternatingProcess(2)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		<-p.C
 	}
 }
 
 func BenchmarkSum_06(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
-	p := NewProcess(4)
+	p := NewAlternatingProcess(4)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		<-p.C
 	}
 }
 
 func BenchmarkSum_07(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
-	p := NewProcess(10)
+	p := NewAlternatingProcess(10)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		<-p.C
 	}
 }
 
@@ -149,8 +141,6 @@ func BenchmarkSum_08(b *testing.B) {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		<-p.C
 	}
 }
 
@@ -163,8 +153,6 @@ func BenchmarkSum_09(b *testing.B) {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		<-p.C
 	}
 }
 
@@ -177,8 +165,6 @@ func BenchmarkSum_10(b *testing.B) {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
-
-		<-p.C
 	}
 }
 
@@ -188,12 +174,12 @@ func BenchmarkSum_11(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
 
-	p := NewOptimizedProcess(500)
+	p := NewOptimizedProcess(5)
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
 
-		<-p.C
+		// log.Println("finished")
 	}
 }
