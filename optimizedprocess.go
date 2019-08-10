@@ -1,19 +1,9 @@
 package parallel
 
-//#include <time.h>
-import "C"
-
 import (
-	"fmt"
 	"math"
 	"runtime"
 	"sync"
-	"time"
-
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/plotutil"
-	"gonum.org/v1/plot/vg"
 )
 
 // OptimizedProcess types execute a specified number of operations on a given number of
@@ -42,23 +32,24 @@ type OptimizedProcess struct {
 	// The last error collected during optimization.
 	previousError float64
 
-	baselineError float64
-
+	// The total error used to calculated the integral of the PID control loop.
 	totalError float64
 
+	// The number of routines to remove after optimizing.
 	removeCount int
 
+	// A mutex to protect against simultaneous read/write to removeCount.
 	removeCountMutex sync.Mutex
 
-	// The time of the last report collected during optimization.
-	lastReportTime time.Time
-
-	// A mutex to protect against sumultaneous read/write to lastReport.
-	reportMutex sync.Mutex
-
+	// The number of CPUs available to the runtime.
 	cpuCount int
 
+	// Reporter to collect CPU usage.
 	reporter *Reporter
+
+	// A mutex to protect against simultaneous read/write when calculating a CPU
+	// usage report.
+	reportMutex sync.Mutex
 }
 
 // MARK: Initializers
@@ -84,35 +75,18 @@ func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
 	go p.runRoutine(iterations, operation)
 
 	p.group.Wait()
-
-	var errors []float64
-	var controller []float64
-	var routines []int
-	for _, v := range reports {
-		errors = append(errors, v.e)
-		controller = append(controller, v.u)
-		routines = append(routines, v.n)
-	}
-
-	// log.Println(diffs)
-
-	PlotSignal(errors, "Error", "Error/Optimization", "Optimization Number", "Time Since Last Operation", "error.png", nil)
-	PlotSignal(controller, "Controller", "Controller/Optimization", "Optimization Number", "Time Since Last Operation", "controller.png", nil)
-	PlotSignalI(routines, "Routines", "Routines/Optimization", "Optimization Number", "Number of Routines", "routines.png", nil)
 }
 
 // MARK: Private methods
 
 // reset resets all of the process' properties to their initial state.
 func (p *OptimizedProcess) reset() {
-	reports = nil
 	p.numRoutines = 1
 	p.count = 0
 	p.removeCount = 0
 	p.previousError = 0.0
 	p.totalError = 0.0
 	p.reporter.Reset()
-	p.lastReportTime = time.Now()
 }
 
 // runRoutine runs a new routine for the given number of iterations, picking up
@@ -120,7 +94,7 @@ func (p *OptimizedProcess) reset() {
 func (p *OptimizedProcess) runRoutine(iterations int, operation Operation) {
 	i := p.nextCount()
 	for i <= iterations {
-		operation(i-1)
+		operation(i - 1)
 
 		p.optimizeNumRoutines(i, iterations, operation)
 
@@ -161,12 +135,7 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 	}
 
 	p.group.Add(1)
-	nextAction, c, u, e := p.nextAction(iteration)
-
-	finished := func() {
-		reports = append(reports, report{e, u, p.numRoutines})
-	}
-	defer finished()
+	nextAction, c := p.nextAction(iteration)
 
 	switch nextAction {
 	case routineActionNone:
@@ -194,29 +163,19 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 	}
 }
 
-type report struct {
-	e float64
-	u float64
-	n int
-}
-
-var reports []report
-var diffs []float64
-
 // nextAction gets the next action the optimize method should use when
 // optimizing the number of goroutines.
-func (p *OptimizedProcess) nextAction(iteration int) (routineAction, int, float64, float64) {
+func (p *OptimizedProcess) nextAction(iteration int) (routineAction, int) {
 	p.reportMutex.Lock()
 	defer p.reportMutex.Unlock()
 
 	usage, t := p.reporter.Usage()
-	// usage = math.Round(usage*100.0) / 100.0
 
 	P := 1.0 - (usage / float64(p.cpuCount))
 	P = (0.01 * P) + (0.99 * p.previousError)
 	I := p.totalError + P
 	D := (P - p.previousError) / t
-	U := 20.0*P + 0.01*I - 3.0*D
+	U := 20.0*P + 0.1*I - 3.0*D
 	N := int(math.Round(U)) - p.numRoutines
 
 	p.previousError = P
@@ -224,102 +183,10 @@ func (p *OptimizedProcess) nextAction(iteration int) (routineAction, int, float6
 
 	usage /= float64(p.cpuCount)
 	if N > 0 {
-		return routineActionAdd, N, usage, P
+		return routineActionAdd, N
 	} else if N < 0 {
-		return routineActionRemove, -N, usage, P
+		return routineActionRemove, -N
 	}
 
-	return routineActionNone, 0, usage, P
-}
-
-// PlotSignal plots a signal and saves the image to a file.
-func PlotSignal(signal []float64, series string, title string, xAxis string, yAxis string, file string, horizontalLines []float64) {
-	pe, err := plot.New()
-	if err != nil {
-		panic(err)
-	}
-
-	pe.Title.Text = title
-	pe.X.Label.Text = xAxis
-	pe.Y.Label.Text = yAxis
-
-	errorValues := make(plotter.XYs, len(signal))
-
-	var horizontalLinePoints []plotter.XYs
-	for range horizontalLines {
-		horizontalLinePoints = append(horizontalLinePoints, make(plotter.XYs, len(signal)))
-	}
-
-	for i, v := range signal {
-		errorValues[i].X = float64(i)
-		errorValues[i].Y = v
-
-		for j := range horizontalLinePoints {
-			horizontalLinePoints[j][i].X = float64(i)
-			horizontalLinePoints[j][i].Y = horizontalLines[j]
-		}
-	}
-
-	err = plotutil.AddLines(pe,
-		series, errorValues,
-	)
-
-	for i, v := range horizontalLinePoints {
-		_ = plotutil.AddLines(pe, fmt.Sprintf("price volume line %d", i), v)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-
-	// Save the plot to a PNG file.
-	if err := pe.Save(16*vg.Inch, 8*vg.Inch, file); err != nil {
-		panic(err)
-	}
-}
-
-// PlotSignalI plots a signal and saves the image to a file.
-func PlotSignalI(signal []int, series string, title string, xAxis string, yAxis string, file string, horizontalLines []float64) {
-	pe, err := plot.New()
-	if err != nil {
-		panic(err)
-	}
-
-	pe.Title.Text = title
-	pe.X.Label.Text = xAxis
-	pe.Y.Label.Text = yAxis
-
-	errorValues := make(plotter.XYs, len(signal))
-
-	var horizontalLinePoints []plotter.XYs
-	for range horizontalLines {
-		horizontalLinePoints = append(horizontalLinePoints, make(plotter.XYs, len(signal)))
-	}
-
-	for i, v := range signal {
-		errorValues[i].X = float64(i)
-		errorValues[i].Y = float64(v)
-
-		for j := range horizontalLinePoints {
-			horizontalLinePoints[j][i].X = float64(i)
-			horizontalLinePoints[j][i].Y = horizontalLines[j]
-		}
-	}
-
-	err = plotutil.AddLines(pe,
-		series, errorValues,
-	)
-
-	for i, v := range horizontalLinePoints {
-		_ = plotutil.AddLines(pe, fmt.Sprintf("price volume line %d", i), v)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-
-	// Save the plot to a PNG file.
-	if err := pe.Save(16*vg.Inch, 8*vg.Inch, file); err != nil {
-		panic(err)
-	}
+	return routineActionNone, 0
 }

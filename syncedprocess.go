@@ -34,7 +34,6 @@ func NewSyncedProcess(numRoutines int) *SyncedProcess {
 
 // Execute executes the parallel process for the specified number of operations.
 func (p *SyncedProcess) Execute(iterations int, operation Operation) {
-	reports = nil
 	p.count = 0
 	p.group.Add(p.numRoutines)
 	for n := 0; n < p.numRoutines; n++ {
@@ -42,16 +41,6 @@ func (p *SyncedProcess) Execute(iterations int, operation Operation) {
 	}
 
 	p.group.Wait()
-
-	var errors []float64
-	var routines []int
-	for _, v := range reports {
-		errors = append(errors, v.e)
-		routines = append(routines, v.n)
-	}
-
-	PlotSignal(errors, "Error", "Error/Optimization", "Optimization Number", "Time Since Last Operation", "error.png", nil)
-	PlotSignalI(routines, "Routines", "Routines/Optimization", "Optimization Number", "Number of Routines", "routines.png", nil)
 }
 
 // NumRoutines returns the number of routines that the synced processes was
