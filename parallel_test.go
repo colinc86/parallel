@@ -9,7 +9,7 @@ import (
 
 // MARK: Helpers
 
-const vectorLength int = 100000
+const vectorLength int = 1000000
 const fftLength int = 256
 
 // newVector creates and returns a new vector with length
@@ -63,6 +63,21 @@ func BenchmarkSum_02(b *testing.B) {
 	}
 }
 
+func BenchmarkSum_025(b *testing.B) {
+	v := newVector()
+	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
+	c := make(chan int)
+
+	for n := 0; n < b.N; n++ {
+		go spectrogram(c, v[:len(s)/3+fftLength], s)
+		go spectrogram(c, v[len(s)/3:2*len(s)/3], s[len(s)/3:])
+		go spectrogram(c, v[2*len(s)/3:], s[2*len(s)/3:])
+		<-c
+		<-c
+		<-c
+	}
+}
+
 func BenchmarkSum_03(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
@@ -98,6 +113,18 @@ func BenchmarkSum_05(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
 	p := NewAlternatingProcess(2)
+
+	for n := 0; n < b.N; n++ {
+		p.Execute(len(s), func(i int) {
+			performFFT(i, v, s)
+		})
+	}
+}
+
+func BenchmarkSum_055(b *testing.B) {
+	v := newVector()
+	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
+	p := NewAlternatingProcess(3)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
@@ -165,6 +192,8 @@ func BenchmarkSum_10(b *testing.B) {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
 		})
+
+		// log.Println("finished test")
 	}
 }
 
@@ -174,7 +203,7 @@ func BenchmarkSum_11(b *testing.B) {
 	v := newVector()
 	s := make([]gdsp.VectorComplex, vectorLength-fftLength)
 
-	p := NewOptimizedProcess(20, 0.001)
+	p := NewOptimizedProcess(1000, 10.0)
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(s), func(i int) {
 			performFFT(i, v, s)
