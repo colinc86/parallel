@@ -4,17 +4,17 @@ package parallel
 import "C"
 import "time"
 
-// Reporter types report the amount of CPU usage between the current and last
+// reporter types report the amount of CPU usage between the current and last
 // call to the usage method.
-type Reporter struct {
+type reporter struct {
 	lastTime time.Time
 	lastTick C.clock_t
 }
 
 // MARK: Initializers
 
-// NewReporter creates and returns a new CPU reporter.
-func NewReporter() *Reporter {
+// newReporter creates and returns a new CPU reporter.
+func newReporter() *reporter {
 	return &Reporter {
 		lastTime: time.Now(),
 		lastTick: C.clock(),
@@ -23,10 +23,10 @@ func NewReporter() *Reporter {
 
 // MARK: Public methods
 
-// Usage returns the decimal percent of CPU usage used by the process. If this
+// usage returns the decimal percent of CPU usage used by the process. If this
 // is the first time to call this method, then the usage reported will be
-// calculated between this call and the last call to Reset (or instantiation).
-func (r *Reporter) Usage() (float64, float64) {
+// calculated between this call and the last call to reset (or instantiation).
+func (r *reporter) usage() (float64, float64) {
 	nowClock := C.clock()
 	nowActual := time.Now()
 	
@@ -40,7 +40,7 @@ func (r *Reporter) Usage() (float64, float64) {
 }
 
 // Reset resets the reporter's last time and tick.
-func (r *Reporter) Reset() {
+func (r *reporter) reset() {
 	r.lastTime = time.Now()
 	r.lastTick = C.clock()
 }

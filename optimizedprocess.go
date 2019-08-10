@@ -1,8 +1,6 @@
 package parallel
 
 import (
-	"math"
-	"runtime"
 	"sync"
 )
 
@@ -29,27 +27,17 @@ type OptimizedProcess struct {
 	// A mutex to protect against simultaneous read/write to count.
 	countMutex sync.Mutex
 
-	// The last error collected during optimization.
-	previousError float64
-
-	// The total error used to calculated the integral of the PID control loop.
-	totalError float64
-
 	// The number of routines to remove after optimizing.
-	removeCount int
+	numToRemove int
 
-	// A mutex to protect against simultaneous read/write to removeCount.
-	removeCountMutex sync.Mutex
+	// A mutex to protect against simultaneous read/write to numToRemove.
+	numToRemoveMutex sync.Mutex
 
-	// The number of CPUs available to the runtime.
-	cpuCount int
+	// A PID controller for controlling the number of goroutines.
+	controller *controller
 
-	// Reporter to collect CPU usage.
-	reporter *Reporter
-
-	// A mutex to protect against simultaneous read/write when calculating a CPU
-	// usage report.
-	reportMutex sync.Mutex
+	// A mutex to protect against simultaneous read/write to controller variables.
+	controllerMutex sync.Mutex
 }
 
 // MARK: Initializers
@@ -59,8 +47,7 @@ type OptimizedProcess struct {
 func NewOptimizedProcess(interval int, gain float64) *OptimizedProcess {
 	return &OptimizedProcess{
 		optimizationInterval: interval,
-		cpuCount:             runtime.NumCPU(),
-		reporter:             NewReporter(),
+		controller:           newController(),
 	}
 }
 
@@ -77,16 +64,20 @@ func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
 	p.group.Wait()
 }
 
+// NumRoutines returns the number of routines that the optimized processes is
+// currently using.
+func (p *OptimizedProcess) NumRoutines() int {
+	return p.numRoutines
+}
+
 // MARK: Private methods
 
 // reset resets all of the process' properties to their initial state.
 func (p *OptimizedProcess) reset() {
 	p.numRoutines = 1
 	p.count = 0
-	p.removeCount = 0
-	p.previousError = 0.0
-	p.totalError = 0.0
-	p.reporter.Reset()
+	p.numToRemove = 0
+	p.controller.reset()
 }
 
 // runRoutine runs a new routine for the given number of iterations, picking up
@@ -98,19 +89,19 @@ func (p *OptimizedProcess) runRoutine(iterations int, operation Operation) {
 
 		p.optimizeNumRoutines(i, iterations, operation)
 
-		p.removeCountMutex.Lock()
+		p.numToRemoveMutex.Lock()
 		p.numRoutinesMutex.Lock()
-		if p.removeCount > 0 && p.numRoutines > 1 {
-			p.removeCount--
+		if p.numToRemove > 0 && p.numRoutines > 1 {
+			p.numToRemove--
 			p.numRoutines--
 			p.numRoutinesMutex.Unlock()
-			p.removeCountMutex.Unlock()
+			p.numToRemoveMutex.Unlock()
 			break
-		} else if p.removeCount > 0 {
-			p.removeCount--
+		} else if p.numToRemove > 0 {
+			p.numToRemove--
 		}
 		p.numRoutinesMutex.Unlock()
-		p.removeCountMutex.Unlock()
+		p.numToRemoveMutex.Unlock()
 
 		i = p.nextCount()
 	}
@@ -156,9 +147,9 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 			}
 		}
 	case routineActionRemove:
-		p.removeCountMutex.Lock()
-		p.removeCount = c
-		p.removeCountMutex.Unlock()
+		p.numToRemoveMutex.Lock()
+		p.numToRemove = c
+		p.numToRemoveMutex.Unlock()
 		p.group.Done()
 	}
 }
@@ -166,26 +157,16 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 // nextAction gets the next action the optimize method should use when
 // optimizing the number of goroutines.
 func (p *OptimizedProcess) nextAction(iteration int) (routineAction, int) {
-	p.reportMutex.Lock()
-	defer p.reportMutex.Unlock()
+	p.controllerMutex.Lock()
+	defer p.controllerMutex.Unlock()
 
-	usage, t := p.reporter.Usage()
+	r := p.controller.next()
+	n := r - p.numRoutines
 
-	P := 1.0 - (usage / float64(p.cpuCount))
-	P = (0.01 * P) + (0.99 * p.previousError)
-	I := p.totalError + P
-	D := (P - p.previousError) / t
-	U := 20.0*P + 0.1*I - 3.0*D
-	N := int(math.Round(U)) - p.numRoutines
-
-	p.previousError = P
-	p.totalError += P
-
-	usage /= float64(p.cpuCount)
-	if N > 0 {
-		return routineActionAdd, N
-	} else if N < 0 {
-		return routineActionRemove, -N
+	if n > 0 {
+		return routineActionAdd, n
+	} else if n < 0 {
+		return routineActionRemove, -n
 	}
 
 	return routineActionNone, 0
