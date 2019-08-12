@@ -5,8 +5,7 @@ import (
 	"runtime"
 )
 
-// controller types represent a PID controller to control
-// a process.
+// controller types represent a PID controller to control a process.
 type controller struct {
 	reporter      *reporter
 	previousError float64
