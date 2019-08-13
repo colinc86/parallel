@@ -15,7 +15,7 @@ type reporter struct {
 
 // newReporter creates and returns a new CPU reporter.
 func newReporter() *reporter {
-	return &Reporter {
+	return &reporter {
 		lastTime: time.Now(),
 		lastTick: C.clock(),
 	}
@@ -26,7 +26,7 @@ func newReporter() *reporter {
 // usage returns the decimal percent of CPU usage used by the process. If this
 // is the first time to call this method, then the usage reported will be
 // calculated between this call and the last call to reset (or instantiation).
-func (r *reporter) usage() (float64, float64) {
+func (r *reporter) usage() float64 {
 	nowClock := C.clock()
 	nowActual := time.Now()
 	
@@ -36,7 +36,7 @@ func (r *reporter) usage() (float64, float64) {
 	actualSeconds := nowActual.Sub(r.lastTime).Seconds()
 	r.lastTime = nowActual
 
-	return clockSeconds / actualSeconds, actualSeconds
+	return clockSeconds / actualSeconds
 }
 
 // Reset resets the reporter's last time and tick.

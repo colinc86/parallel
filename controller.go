@@ -11,28 +11,34 @@ type controller struct {
 	previousError float64
 	totalError    float64
 	cpuCount      int
+	kp            float64
+	ki            float64
+	kd            float64
 }
 
 // newController creates and resturns a new controller.
-func newController() *controller {
+func newController(kp float64, ki float64, kd float64) *controller {
 	return &controller{
 		reporter: newReporter(),
 		cpuCount: runtime.NumCPU(),
+		kp:       kp,
+		ki:       ki,
+		kd:       kd,
 	}
 }
 
 // next calculates the next value from the control loop.
 func (c *controller) next() int {
-	usage, t := c.reporter.usage()
+	usage := c.reporter.usage()
 
 	p := 1.0 - (usage / float64(c.cpuCount))
-	p = (0.01 * p) + (0.99 * c.previousError)
+	p = (0.1 * p) + (0.9 * c.previousError)
 
 	i := c.totalError + p
 
-	d := (p - c.previousError) / t
+	d := p - c.previousError
 
-	u := 20.0*p + 0.01*i - 3.0*d
+	u := c.kp*p + c.ki*i - c.kd*d
 	n := int(math.Round(u))
 
 	c.previousError = p

@@ -1,16 +1,28 @@
 package parallel
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // OptimizedProcess types execute a specified number of operations on a variable
 // number of goroutines.
 type OptimizedProcess struct {
 	// The number of iterations between optimizations.
-	optimizationInterval int
+	optimizationInterval time.Duration
 
 	// The process' wait group to use when waiting for goroutines to
 	// finish their execution.
 	group sync.WaitGroup
+
+	// The ticker responsible for triggering an optimization.
+	ticker *time.Ticker
+
+	// Set to true when the ticker fires.
+	needsOptimization bool
+
+	// A mutex to provide read/write lock to needsOptimization.
+	needsOptimizationMutex sync.Mutex
 
 	// The number of goroutines the process should use when divvying up
 	// operations.
@@ -33,10 +45,10 @@ type OptimizedProcess struct {
 
 // NewOptimizedProcess creates and returns a new parallel process with the
 // specified optimization interval.
-func NewOptimizedProcess(interval int) *OptimizedProcess {
+func NewOptimizedProcess(interval time.Duration, kp float64, ki float64, kd float64) *OptimizedProcess {
 	return &OptimizedProcess{
 		optimizationInterval: interval,
-		controller:           newController(),
+		controller:           newController(kp, ki, kd),
 	}
 }
 
@@ -49,8 +61,10 @@ func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
 	p.group.Add(1)
 
 	go p.runRoutine(iterations, operation)
+	go p.beginOptimizing()
 
 	p.group.Wait()
+	p.ticker.Stop()
 }
 
 // NumRoutines returns the number of routines that the optimized processes is
@@ -63,10 +77,20 @@ func (p *OptimizedProcess) NumRoutines() int {
 
 // reset resets all of the process' properties to their initial state.
 func (p *OptimizedProcess) reset() {
+	p.needsOptimization = false
 	p.numRoutines.set(1)
 	p.count.set(0)
 	p.numToRemove.set(0)
 	p.controller.reset()
+}
+
+func (p *OptimizedProcess) beginOptimizing() {
+	p.ticker = time.NewTicker(p.optimizationInterval)
+	for range p.ticker.C {
+		p.needsOptimizationMutex.Lock()
+		p.needsOptimization = true
+		p.needsOptimizationMutex.Unlock()
+	}
 }
 
 // runRoutine runs a new routine for the given number of iterations, picking up
@@ -102,12 +126,16 @@ func (p *OptimizedProcess) runRoutine(iterations int, operation Operation) {
 // optimizeNumRoutines optimized the number of routines to use for the parallel
 // operation.
 func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, operation Operation) {
-	if iteration%p.optimizationInterval != 0 || iteration == 0 {
+	p.needsOptimizationMutex.Lock()
+	if !p.needsOptimization {
+		p.needsOptimizationMutex.Unlock()
 		return
 	}
+	p.needsOptimization = false
+	p.needsOptimizationMutex.Unlock()
 
 	p.group.Add(1)
-	n := p.nextAction(iteration)
+	n := p.nextAction(iteration) - p.numRoutines.get()
 
 	if n == 0 {
 		p.group.Done()
