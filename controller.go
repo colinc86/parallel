@@ -38,7 +38,7 @@ func (c *controller) next() int {
 
 	d := p - c.previousError
 
-	u := c.kp*p + c.ki*i - c.kd*d
+	u := c.kp*p + c.ki*i + c.kd*d
 	n := int(math.Round(u))
 
 	c.previousError = p

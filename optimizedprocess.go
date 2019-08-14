@@ -28,6 +28,9 @@ type OptimizedProcess struct {
 	// operations.
 	numRoutines safeInt
 
+	// The maximum number of goroutines to use when optimizing.
+	maxRoutines safeInt
+
 	// The number of iterations in the current execution that have begun.
 	count safeInt
 
@@ -45,9 +48,10 @@ type OptimizedProcess struct {
 
 // NewOptimizedProcess creates and returns a new parallel process with the
 // specified optimization interval.
-func NewOptimizedProcess(interval time.Duration, kp float64, ki float64, kd float64) *OptimizedProcess {
+func NewOptimizedProcess(interval time.Duration, maxRoutines int, kp float64, ki float64, kd float64) *OptimizedProcess {
 	return &OptimizedProcess{
 		optimizationInterval: interval,
+		maxRoutines:          safeInt{value: maxRoutines},
 		controller:           newController(kp, ki, kd),
 	}
 }
@@ -71,6 +75,48 @@ func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
 // currently using.
 func (p *OptimizedProcess) NumRoutines() int {
 	return p.numRoutines.get()
+}
+
+// GetOptimizationInterval returns the interval of the process' ticker.
+func (p *OptimizedProcess) GetOptimizationInterval() time.Duration {
+	return p.optimizationInterval
+}
+
+// SetOptimizationInterval sets the optimization interval and restarts the
+// process' ticker.
+func (p *OptimizedProcess) SetOptimizationInterval(interval time.Duration) {
+	p.ticker.Stop()
+	p.optimizationInterval = interval
+	go p.beginOptimizing()
+}
+
+// GetMaxRoutines returns the maximum number of goroutins to use when
+// optimizing.
+func (p *OptimizedProcess) GetMaxRoutines() int {
+	return p.maxRoutines.get()
+}
+
+// SetMaxRoutines sets the maximum number of goroutines to use when optimizing.
+// Must be greater than 0.
+func (p *OptimizedProcess) SetMaxRoutines(n int) {
+	p.maxRoutines.set(n)
+}
+
+// GetOptimizationParameters gets the PID controller coefficients.
+func (p *OptimizedProcess) GetOptimizationParameters() (float64, float64, float64) {
+	p.controllerMutex.Lock()
+	defer p.controllerMutex.Unlock()
+	return p.controller.kp, p.controller.ki, p.controller.kd
+}
+
+// SetOptimizationParameters sets the PID controller coefficients.
+func (p *OptimizedProcess) SetOptimizationParameters(kp float64, ki float64, kd float64) {
+	p.controllerMutex.Lock()
+	defer p.controllerMutex.Unlock()
+
+	p.controller.kp = kp
+	p.controller.ki = ki
+	p.controller.kd = kd
 }
 
 // MARK: Private methods
@@ -135,7 +181,13 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 	p.needsOptimizationMutex.Unlock()
 
 	p.group.Add(1)
-	n := p.nextAction(iteration) - p.numRoutines.get()
+	n := p.nextAction(iteration)
+	p.maxRoutines.mutex.Lock()
+	if n > p.maxRoutines.value {
+		n = p.maxRoutines.value
+	}
+	p.maxRoutines.mutex.Unlock()
+	n -= p.numRoutines.get()
 
 	if n == 0 {
 		p.group.Done()
