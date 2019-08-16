@@ -15,7 +15,7 @@ type reporter struct {
 
 // newReporter creates and returns a new CPU reporter.
 func newReporter() *reporter {
-	return &reporter {
+	return &reporter{
 		lastTime: time.Now(),
 		lastTick: C.clock(),
 	}
@@ -29,8 +29,8 @@ func newReporter() *reporter {
 func (r *reporter) usage() float64 {
 	nowClock := C.clock()
 	nowActual := time.Now()
-	
-	clockSeconds := float64(nowClock - r.lastTick) / float64(C.CLOCKS_PER_SEC)
+
+	clockSeconds := float64(nowClock-r.lastTick) / float64(C.CLOCKS_PER_SEC)
 	r.lastTick = nowClock
 
 	actualSeconds := nowActual.Sub(r.lastTime).Seconds()
