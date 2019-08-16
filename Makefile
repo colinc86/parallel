@@ -25,7 +25,7 @@ fmt:
 # Needs lint package to be installed golang.org/x/lint/golint
 lint:
 	@echo "+ go lint"
-	golint -min_confidence=0.1 $(PKG)/...
+	golint -min_confidence=0.3 $(PKG)/...
 
 vet:
 	@echo "+ go vet"
