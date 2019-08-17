@@ -48,11 +48,11 @@ type OptimizedProcess struct {
 
 // NewOptimizedProcess creates and returns a new parallel process with the
 // specified optimization interval.
-func NewOptimizedProcess(interval time.Duration, maxRoutines int, kp float64, ki float64, kd float64) *OptimizedProcess {
+func NewOptimizedProcess(interval time.Duration, maxRoutines int, controllerConfiguration *ControllerConfiguration) *OptimizedProcess {
 	return &OptimizedProcess{
 		optimizationInterval: interval,
 		maxRoutines:          safeInt{value: maxRoutines},
-		controller:           newController(kp, ki, kd),
+		controller:           newController(controllerConfiguration),
 	}
 }
 
@@ -102,21 +102,19 @@ func (p *OptimizedProcess) SetMaxRoutines(n int) {
 	p.maxRoutines.set(n)
 }
 
-// GetOptimizationParameters gets the PID controller coefficients.
-func (p *OptimizedProcess) GetOptimizationParameters() (float64, float64, float64) {
+// GetControllerConfiguration gets the PID controller configuration.
+func (p *OptimizedProcess) GetControllerConfiguration() *ControllerConfiguration {
 	p.controllerMutex.Lock()
 	defer p.controllerMutex.Unlock()
-	return p.controller.kp, p.controller.ki, p.controller.kd
+	return p.controller.configuration
 }
 
-// SetOptimizationParameters sets the PID controller coefficients.
-func (p *OptimizedProcess) SetOptimizationParameters(kp float64, ki float64, kd float64) {
+// SetControllerConfiguration sets the PID controller coefficients.
+func (p *OptimizedProcess) SetControllerConfiguration(configuration *ControllerConfiguration) {
 	p.controllerMutex.Lock()
 	defer p.controllerMutex.Unlock()
 
-	p.controller.kp = kp
-	p.controller.ki = ki
-	p.controller.kd = kd
+	p.controller.configuration = configuration
 }
 
 // MARK: Private methods

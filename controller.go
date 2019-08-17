@@ -7,23 +7,20 @@ import (
 
 // controller types represent a PID controller to control a process.
 type controller struct {
-	reporter      *reporter
-	previousError float64
-	totalError    float64
-	cpuCount      int
-	kp            float64
-	ki            float64
-	kd            float64
+	reporter       *reporter
+	previousError  float64
+	totalError     float64
+	previousOutput float64
+	cpuCount       int
+	configuration  *ControllerConfiguration
 }
 
 // newController creates and resturns a new controller.
-func newController(kp float64, ki float64, kd float64) *controller {
+func newController(configuration *ControllerConfiguration) *controller {
 	return &controller{
-		reporter: newReporter(),
-		cpuCount: runtime.NumCPU(),
-		kp:       kp,
-		ki:       ki,
-		kd:       kd,
+		reporter:      newReporter(),
+		cpuCount:      runtime.NumCPU(),
+		configuration: configuration,
 	}
 }
 
@@ -32,17 +29,20 @@ func (c *controller) next() int {
 	usage := c.reporter.usage()
 
 	p := 1.0 - (usage / float64(c.cpuCount))
-	p = (0.1 * p) + (0.9 * c.previousError)
+	p = ((1.0 - c.configuration.ErrorResponse) * p) + (c.configuration.ErrorResponse * c.previousError)
 
 	i := c.totalError + p
 
 	d := p - c.previousError
 
-	u := c.kp*p + c.ki*i + c.kd*d
+	u := c.configuration.Kp*p + c.configuration.Ki*i + c.configuration.Kd*d
+	u = ((1.0 - c.configuration.OutputResponse) * u) + (c.configuration.OutputResponse * c.previousOutput)
+
 	n := int(math.Round(u))
 
 	c.previousError = p
 	c.totalError += p
+	c.previousOutput = u
 
 	return n
 }

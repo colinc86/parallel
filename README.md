@@ -18,12 +18,13 @@ p.Execute(100, func (i int) {
 ```
 
 ### OptimizedProcess
-`OptimizedProcess` types execute their set of operations on a variable number of goroutines by utilizing a PID control loop to maximize CPU throughput.
+`OptimizedProcess` types execute their set of operations on a variable number of goroutines by utilizing a PID control loop to maximize CPU throughput. You configure the PID controller by creating a `ControllerConfiguration` struct and passing to the `NewOptimizedProcess` function.
 
 ```go
 // Create an optimized process with optimiztaion interval, max goroutine count,
-// and PID coefficients.
-p := parallel.NewOptimizedProcess(500 * time.Millisecond, 2 * runtime.NumCPU(), 3.0, 0.0, 1.0)
+// and PID controller configuration.
+c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
+p := parallel.NewOptimizedProcess(500 * time.Millisecond, 2 * runtime.NumCPU(), c)
 
 // Execute 100 operations in parallel.
 p.Execute(100, func(i int) {
