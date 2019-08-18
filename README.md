@@ -42,8 +42,11 @@ go p.Execute(100, func(i int) {
 
 // Modify optimization parameters while the process is executing...
 p.SetOptimizationInterval(time.Second)
-p.SetOptimizationCoefficients(1.0, 0.01, 1.0)
 p.SetMaxRoutines(50)
+
+c := p.GetControllerConfiguration()
+// Modify config...
+p.SetControllerConfiguration(c)
 ```
 
 #### Tuning the PID Controller

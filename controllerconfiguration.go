@@ -4,16 +4,16 @@ package parallel
 // values from a PID controller.
 type ControllerConfiguration struct {
 	// The proportional term coefficient.
-	Kp             float64
+	Kp float64
 
 	// The integral term coefficient.
-	Ki             float64
+	Ki float64
 
 	// The derivative term coefficient.
-	Kd             float64
+	Kd float64
 
 	// The error function response.
-	ErrorResponse  float64
+	ErrorResponse float64
 
 	// The output signal response.
 	OutputResponse float64
@@ -29,4 +29,21 @@ func NewControllerConfiguration(kp float64, ki float64, kd float64, errorRespons
 		ErrorResponse:  errorResponse,
 		OutputResponse: outputResponse,
 	}
+}
+
+// newControllerConfigurationFromConfiguration creates and returns a new
+// controller configuration from another configuration.
+func newControllerConfigurationFromConfiguration(configuration *ControllerConfiguration) *ControllerConfiguration {
+	return &ControllerConfiguration{
+		Kp:             configuration.Kp,
+		Ki:             configuration.Ki,
+		Kd:             configuration.Kd,
+		ErrorResponse:  configuration.ErrorResponse,
+		OutputResponse: configuration.OutputResponse,
+	}
+}
+
+// Copy returns a copy of the configuration.
+func (c *ControllerConfiguration) Copy() *ControllerConfiguration {
+	return newControllerConfigurationFromConfiguration(c)
 }

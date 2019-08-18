@@ -155,7 +155,7 @@ func (p *OptimizedProcess) SetMaxRoutines(n int) {
 func (p *OptimizedProcess) GetControllerConfiguration() *ControllerConfiguration {
 	p.controllerMutex.Lock()
 	defer p.controllerMutex.Unlock()
-	return p.controller.configuration
+	return p.controller.configuration.Copy()
 }
 
 // SetControllerConfiguration sets the PID controller coefficients.
