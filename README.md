@@ -21,10 +21,10 @@ p.Execute(100, func (i int) {
 `OptimizedProcess` types execute their set of operations on a variable number of goroutines by utilizing a PID control loop to maximize CPU throughput. You configure the PID controller by creating a `ControllerConfiguration` struct and passing to the `NewOptimizedProcess` function.
 
 ```go
-// Create an optimized process with optimiztaion interval, max goroutine count,
+// Create an optimized process with optimization interval, max goroutine count,
 // and PID controller configuration.
 c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
-p := parallel.NewOptimizedProcess(500 * time.Millisecond, 2 * runtime.NumCPU(), c)
+p := parallel.NewOptimizedProcess(500 * time.Millisecond, 2 * runtime.NumCPU(), c, false)
 
 // Execute 100 operations in parallel.
 p.Execute(100, func(i int) {
@@ -44,4 +44,30 @@ go p.Execute(100, func(i int) {
 p.SetOptimizationInterval(time.Second)
 p.SetOptimizationCoefficients(1.0, 0.01, 1.0)
 p.SetMaxRoutines(50)
+```
+
+#### Tuning the PID Controller
+An optimized process has four [probes](https://www.github.com/colinc86/probes) that are activated by setting the `probeController` parameter to true upon initialization. They monitor and keep a record of the following values.
+- CPU throughput
+- PID input error
+- PID output signal
+- Number of goroutines
+
+Examine any of the probes programmatically, or by saving a plot of the probe's signal to file.
+
+```go
+// Create an optimized process with probeController set to true.
+c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
+p := parallel.NewOptimizedProcess(500 * time.Millisecond, 2 * runtime.NumCPU(), c, true)
+
+// Execute 100 operations in parallel.
+p.Execute(100, func(i int) {
+  // Perform the ith operation.
+})
+
+// Examine the PID output signal programmatically
+s := p.PIDProbe.Signal()
+
+// Or save a plot of the signal to file
+p.PIDProbe.WriteSignalToPNG("pid")
 ```

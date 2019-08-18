@@ -1,8 +1,12 @@
 package parallel
 
 import (
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/colinc86/probes"
 )
 
 // OptimizedProcess types execute a specified number of operations on a variable
@@ -18,41 +22,65 @@ type OptimizedProcess struct {
 	// The ticker responsible for triggering an optimization.
 	ticker *time.Ticker
 
-	// Set to true when the ticker fires.
-	needsOptimization bool
-
-	// A mutex to provide read/write lock to needsOptimization.
-	needsOptimizationMutex sync.Mutex
-
 	// The number of goroutines the process should use when divvying up
 	// operations.
-	numRoutines safeInt
+	numRoutines int64
 
 	// The maximum number of goroutines to use when optimizing.
 	maxRoutines safeInt
 
 	// The number of iterations in the current execution that have begun.
-	count safeInt
+	iteration safeInt
+
+	// The total number of iterations specified by the last call to Execute.
+	iterations int
+
+	// The operation function called for each iteration of the process.
+	operation Operation
 
 	// The number of routines to remove after optimizing.
-	numToRemove safeInt
+	numToRemove int64
+
+	// The CPU reporter used to calculate CPU throughput.
+	reporter *reporter
 
 	// A PID controller for controlling the number of goroutines.
 	controller *controller
 
 	// A mutex to protect against simultaneous read/write to controller variables.
 	controllerMutex sync.Mutex
+
+	// Whether or not the controller should be probed.
+	probeController bool
+
+	// The CPU probe.
+	CPUProbe *probes.Probe
+
+	// The error probe.
+	ErrorProbe *probes.Probe
+
+	// The PID output probe.
+	PIDProbe *probes.Probe
+
+	// The routine probe.
+	RoutineProbe *probes.Probe
 }
 
 // MARK: Initializers
 
 // NewOptimizedProcess creates and returns a new parallel process with the
 // specified optimization interval.
-func NewOptimizedProcess(interval time.Duration, maxRoutines int, controllerConfiguration *ControllerConfiguration) *OptimizedProcess {
+func NewOptimizedProcess(interval time.Duration, maxRoutines int, controllerConfiguration *ControllerConfiguration, probeController bool) *OptimizedProcess {
 	return &OptimizedProcess{
 		optimizationInterval: interval,
 		maxRoutines:          safeInt{value: maxRoutines},
+		reporter:             newReporter(),
 		controller:           newController(controllerConfiguration),
+		probeController:      probeController,
+		CPUProbe:             probes.NewProbe(),
+		ErrorProbe:           probes.NewProbe(),
+		PIDProbe:             probes.NewProbe(),
+		RoutineProbe:         probes.NewProbe(),
 	}
 }
 
@@ -61,20 +89,41 @@ func NewOptimizedProcess(interval time.Duration, maxRoutines int, controllerConf
 // Execute executes the parallel process for the specified number of operations
 // while optimizing every interval iterations.
 func (p *OptimizedProcess) Execute(iterations int, operation Operation) {
+	if p.probeController {
+		p.CPUProbe.Activate()
+		p.ErrorProbe.Activate()
+		p.PIDProbe.Activate()
+		p.RoutineProbe.Activate()
+	}
+
+	p.iterations = iterations
+	p.operation = operation
 	p.reset()
 	p.group.Add(1)
 
-	go p.runRoutine(iterations, operation)
+	go p.runRoutine()
 	go p.beginOptimizing()
 
 	p.group.Wait()
 	p.ticker.Stop()
+
+	if p.probeController {
+		p.CPUProbe.Flush()
+		p.ErrorProbe.Flush()
+		p.PIDProbe.Flush()
+		p.RoutineProbe.Flush()
+
+		p.CPUProbe.Deactivate()
+		p.ErrorProbe.Deactivate()
+		p.PIDProbe.Deactivate()
+		p.RoutineProbe.Deactivate()
+	}
 }
 
 // NumRoutines returns the number of routines that the optimized processes is
 // currently using.
 func (p *OptimizedProcess) NumRoutines() int {
-	return p.numRoutines.get()
+	return int(atomic.LoadInt64(&p.numRoutines))
 }
 
 // GetOptimizationInterval returns the interval of the process' ticker.
@@ -90,7 +139,7 @@ func (p *OptimizedProcess) SetOptimizationInterval(interval time.Duration) {
 	go p.beginOptimizing()
 }
 
-// GetMaxRoutines returns the maximum number of goroutins to use when
+// GetMaxRoutines returns the maximum number of goroutines to use when
 // optimizing.
 func (p *OptimizedProcess) GetMaxRoutines() int {
 	return p.maxRoutines.get()
@@ -121,47 +170,46 @@ func (p *OptimizedProcess) SetControllerConfiguration(configuration *ControllerC
 
 // reset resets all of the process' properties to their initial state.
 func (p *OptimizedProcess) reset() {
-	p.needsOptimization = false
-	p.numRoutines.set(1)
-	p.count.set(0)
-	p.numToRemove.set(0)
+	if p.probeController {
+		p.PIDProbe.ClearSignal()
+		p.CPUProbe.ClearSignal()
+		p.ErrorProbe.ClearSignal()
+		p.RoutineProbe.ClearSignal()
+	}
+
+	p.numRoutines = 1
+	p.iteration.set(0)
+	p.numToRemove = 0
 	p.controller.reset()
+	p.reporter.reset()
 }
 
+// beginOptimizing begins optimizing by calling optimizeNumRoutines each time
+// the process' ticker fires.
 func (p *OptimizedProcess) beginOptimizing() {
 	p.ticker = time.NewTicker(p.optimizationInterval)
 	for range p.ticker.C {
-		p.needsOptimizationMutex.Lock()
-		p.needsOptimization = true
-		p.needsOptimizationMutex.Unlock()
+		p.optimizeNumRoutines()
 	}
 }
 
 // runRoutine runs a new routine for the given number of iterations, picking up
 // where other routines have left off.
-func (p *OptimizedProcess) runRoutine(iterations int, operation Operation) {
-	i := p.count.get()
-	for i < iterations {
-		operation(i)
+func (p *OptimizedProcess) runRoutine() {
+	i := p.iteration.get()
+	for i < p.iterations {
+		p.operation(i)
 
-		p.optimizeNumRoutines(i, iterations, operation)
-
-		// Lock/unlock together to keep vars in sync
-		p.numToRemove.mutex.Lock()
-		p.numRoutines.mutex.Lock()
-		if p.numToRemove.value > 0 && p.numRoutines.value > 1 {
-			p.numToRemove.value--
-			p.numRoutines.value--
-			p.numToRemove.mutex.Unlock()
-			p.numRoutines.mutex.Unlock()
+		n := atomic.LoadInt64(&p.numToRemove)
+		if n > 0 && atomic.LoadInt64(&p.numRoutines) > 1 {
+			atomic.AddInt64(&p.numToRemove, -1)
+			atomic.AddInt64(&p.numRoutines, -1)
 			break
-		} else if p.numToRemove.value > 0 {
-			p.numToRemove.value--
+		} else if n > 0 {
+			atomic.AddInt64(&p.numToRemove, -1)
 		}
-		p.numRoutines.mutex.Unlock()
-		p.numToRemove.mutex.Unlock()
 
-		i = p.count.add(1)
+		i = p.iteration.add(1)
 	}
 
 	p.group.Done()
@@ -169,23 +217,30 @@ func (p *OptimizedProcess) runRoutine(iterations int, operation Operation) {
 
 // optimizeNumRoutines optimized the number of routines to use for the parallel
 // operation.
-func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, operation Operation) {
-	p.needsOptimizationMutex.Lock()
-	if !p.needsOptimization {
-		p.needsOptimizationMutex.Unlock()
-		return
-	}
-	p.needsOptimization = false
-	p.needsOptimizationMutex.Unlock()
-
+func (p *OptimizedProcess) optimizeNumRoutines() {
 	p.group.Add(1)
-	n := p.nextAction(iteration)
+
+	p.controllerMutex.Lock()
+	usage := p.reporter.usage()
+	u, e := p.controller.next(usage)
+	p.controllerMutex.Unlock()
+
+	m := int(math.Ceil(u))
 	p.maxRoutines.mutex.Lock()
-	if n > p.maxRoutines.value {
-		n = p.maxRoutines.value
+	if m > p.maxRoutines.value {
+		m = p.maxRoutines.value
 	}
 	p.maxRoutines.mutex.Unlock()
-	n -= p.numRoutines.get()
+
+	routines := int(atomic.LoadInt64(&p.numRoutines))
+	n := m - routines
+
+	if p.probeController {
+		p.CPUProbe.C <- usage
+		p.PIDProbe.C <- u
+		p.ErrorProbe.C <- e
+		p.RoutineProbe.C <- float64(m)
+	}
 
 	if n == 0 {
 		p.group.Done()
@@ -194,21 +249,15 @@ func (p *OptimizedProcess) optimizeNumRoutines(iteration int, iterations int, op
 			p.group.Add(n - 1)
 		}
 
-		p.numRoutines.add(n)
+		atomic.AddInt64(&p.numRoutines, int64(n))
+
 		for i := 0; i < n; i++ {
-			go p.runRoutine(iterations, operation)
+			go p.runRoutine()
 		}
 	} else if n < 0 {
-		p.numToRemove.set(n)
+		if routines > 1 {
+			atomic.StoreInt64(&p.numToRemove, -1*int64(n))
+		}
 		p.group.Done()
 	}
-}
-
-// nextAction gets the next action the optimize method should use when
-// optimizing the number of goroutines.
-func (p *OptimizedProcess) nextAction(iteration int) int {
-	p.controllerMutex.Lock()
-	defer p.controllerMutex.Unlock()
-
-	return p.controller.next() - p.numRoutines.get()
 }

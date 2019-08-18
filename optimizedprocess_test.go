@@ -9,9 +9,9 @@ import (
 // MARK: Tests
 
 func TestOptimizedProcessCompleteness(t *testing.T) {
-	v := make([]float64, 1000000)
+	v := make([]float64, 10000000)
 	c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
-	p := NewOptimizedProcess(100*time.Millisecond, 20, c)
+	p := NewOptimizedProcess(100*time.Millisecond, 20, c, false)
 	p.Execute(len(v), func(i int) {
 		v[i] = float64(i + 1)
 	})
@@ -28,8 +28,8 @@ func TestOptimizedProcessCompleteness(t *testing.T) {
 
 func BenchmarkOptimizedProcess(b *testing.B) {
 	v := make([]float64, 1000000)
-	c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
-	p := NewOptimizedProcess(100*time.Millisecond, 20, c)
+	c := NewControllerConfiguration(2.0, 0.0, 1.0, 1.0, 1.0)
+	p := NewOptimizedProcess(100*time.Millisecond, 20, c, false)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(v), func(i int) {
