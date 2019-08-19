@@ -2,9 +2,9 @@ package parallel
 
 import "sync"
 
-// SyncedProcess types execute a specified number of operations on a given
+// FixedProcess types execute a specified number of operations on a given
 // number of goroutines.
-type SyncedProcess struct {
+type FixedProcess struct {
 	// The number of goroutines the process should use when divvying up
 	// operations.
 	numRoutines int
@@ -19,10 +19,10 @@ type SyncedProcess struct {
 
 // MARK: Initializers
 
-// NewSyncedProcess creates and returns a new parallel process with the
+// NewFixedProcess creates and returns a new parallel process with the
 // specified number of goroutines.
-func NewSyncedProcess(numRoutines int) *SyncedProcess {
-	return &SyncedProcess{
+func NewFixedProcess(numRoutines int) *FixedProcess {
+	return &FixedProcess{
 		numRoutines: numRoutines,
 	}
 }
@@ -30,7 +30,7 @@ func NewSyncedProcess(numRoutines int) *SyncedProcess {
 // MARK: Public methods
 
 // Execute executes the synced process for the specified number of operations.
-func (p *SyncedProcess) Execute(iterations int, operation Operation) {
+func (p *FixedProcess) Execute(iterations int, operation Operation) {
 	p.count.set(0)
 	p.group.Add(p.numRoutines)
 	for n := 0; n < p.numRoutines; n++ {
@@ -42,13 +42,13 @@ func (p *SyncedProcess) Execute(iterations int, operation Operation) {
 
 // NumRoutines returns the number of routines that the synced processes was
 // initialized with.
-func (p *SyncedProcess) NumRoutines() int {
+func (p *FixedProcess) NumRoutines() int {
 	return p.numRoutines
 }
 
 // MARK: Private methods
 
-func (p *SyncedProcess) runRoutine(iterations int, operation Operation) {
+func (p *FixedProcess) runRoutine(iterations int, operation Operation) {
 	defer p.group.Done()
 
 	i := p.count.get()

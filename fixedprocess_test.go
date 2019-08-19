@@ -7,9 +7,9 @@ import (
 
 // MARK: Tests
 
-func TestSyncedProcessCompleteness_01(t *testing.T) {
+func TestFixedProcessCompleteness_01(t *testing.T) {
 	v := make([]float64, 1000000)
-	p := NewSyncedProcess(1)
+	p := NewFixedProcess(1)
 	p.Execute(len(v), func(i int) {
 		v[i] = float64(i + 1)
 	})
@@ -22,9 +22,9 @@ func TestSyncedProcessCompleteness_01(t *testing.T) {
 	}
 }
 
-func TestSyncedProcessCompleteness_02(t *testing.T) {
+func TestFixedProcessCompleteness_02(t *testing.T) {
 	v := make([]float64, 1000000)
-	p := NewSyncedProcess(2)
+	p := NewFixedProcess(2)
 	p.Execute(len(v), func(i int) {
 		v[i] = float64(i + 1)
 	})
@@ -39,9 +39,9 @@ func TestSyncedProcessCompleteness_02(t *testing.T) {
 
 // MARK: Benchmarks
 
-func BenchmarkSyncedProcess_01(b *testing.B) {
+func BenchmarkFixedProcess_01(b *testing.B) {
 	v := make([]float64, 1000000)
-	p := NewSyncedProcess(1)
+	p := NewFixedProcess(1)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(v), func(i int) {
@@ -50,9 +50,9 @@ func BenchmarkSyncedProcess_01(b *testing.B) {
 	}
 }
 
-func BenchmarkSyncedProcess_02(b *testing.B) {
+func BenchmarkFixedProcess_02(b *testing.B) {
 	v := make([]float64, 1000000)
-	p := NewSyncedProcess(2)
+	p := NewFixedProcess(2)
 
 	for n := 0; n < b.N; n++ {
 		p.Execute(len(v), func(i int) {
