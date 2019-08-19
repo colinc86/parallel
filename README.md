@@ -56,8 +56,6 @@ An optimized process has four [probes](https://www.github.com/colinc86/probes) t
 - PID output signal
 - Number of goroutines
 
-Examine any of the probes programmatically, or by saving a plot of the probe's signal to file.
-
 ```go
 // Create an optimized process with probeController set to true.
 c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
@@ -70,7 +68,4 @@ p.Execute(100, func(i int) {
 
 // Examine the PID output signal programmatically
 s := p.PIDProbe.Signal()
-
-// Or save a plot of the signal to file
-p.PIDProbe.WriteSignalToPNG("pid")
 ```
