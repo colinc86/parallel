@@ -71,17 +71,22 @@ type VariableProcess struct {
 // NewVariableProcess creates and returns a new parallel process with the
 // specified optimization interval.
 func NewVariableProcess(interval time.Duration, maxRoutines int, controllerConfiguration *ControllerConfiguration, probeController bool) *VariableProcess {
-	return &VariableProcess{
+	p := &VariableProcess{
 		optimizationInterval: interval,
 		maxRoutines:          safeInt{value: maxRoutines},
 		reporter:             newReporter(),
 		controller:           newController(controllerConfiguration),
 		probeController:      probeController,
-		CPUProbe:             probes.NewProbe(),
-		ErrorProbe:           probes.NewProbe(),
-		PIDProbe:             probes.NewProbe(),
-		RoutineProbe:         probes.NewProbe(),
 	}
+
+	if probeController {
+		p.CPUProbe = probes.NewProbe()
+		p.ErrorProbe = probes.NewProbe()
+		p.PIDProbe = probes.NewProbe()
+		p.RoutineProbe = probes.NewProbe()
+	}
+
+	return p
 }
 
 // MARK: Public methods
