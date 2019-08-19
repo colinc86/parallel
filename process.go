@@ -1,3 +1,5 @@
+// Package parallel provides objects for executing parallel operations on either
+// a fixed of variable number of goroutines.
 package parallel
 
 // Operation types represent a single operation in a parallel process.
