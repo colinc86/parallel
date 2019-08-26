@@ -14,6 +14,9 @@ type Process interface {
 	// using the provided operation function.
 	Execute(iterations int, operation Operation)
 
+	// Stop stops the process if it is currently executing.
+	Stop()
+
 	// NumRoutines returns the number of routines that are currently executing in
 	// the parallel process.
 	NumRoutines() int

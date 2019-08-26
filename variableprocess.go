@@ -125,6 +125,12 @@ func (p *VariableProcess) Execute(iterations int, operation Operation) {
 	}
 }
 
+// Stop stops the variable process after all of the current operations have
+// finished executing.
+func (p *VariableProcess) Stop() {
+	p.iteration.set(p.iterations)
+}
+
 // NumRoutines returns the number of routines that the variable processes is
 // currently using.
 func (p *VariableProcess) NumRoutines() int {

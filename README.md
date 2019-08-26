@@ -1,4 +1,6 @@
 # parallel
+[![GoDoc](https://godoc.org/github.com/colinc86/parallel?status.svg)](https://godoc.org/github.com/colinc86/parallel)
+
 A parallel processing package for Go.
 
 ## Usage
@@ -69,3 +71,14 @@ p.Execute(100, func(i int) {
 // Examine the PID output signal programmatically
 s := p.PIDProbe.Signal()
 ```
+
+### Stopping a Process
+A process can be stopped at any time by calling the `Stop()` method. The process will stop after any operations that have already begun finish executing.
+
+```go
+p.Execute(100, func(i int) {
+  // Perform the ith operation with an error condition...
+  if err != nil {
+    p.Stop()
+  }
+})
