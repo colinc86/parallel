@@ -23,10 +23,10 @@ p.Execute(100, func (i int) {
 `VariableProcess` types execute their set of operations on a variable number of goroutines by utilizing a PID control loop to maximize CPU throughput. You configure the PID controller by creating a `ControllerConfiguration` struct and passing to the `NewVariableProcess` function.
 
 ```go
-// Create a variable process with optimization interval, max goroutine count,
-// and PID controller configuration.
+// Create a variable process with optimization interval, initial routine count,
+// max goroutine count, and PID controller configuration.
 c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
-p := parallel.NewVariableProcess(500 * time.Millisecond, 2 * runtime.NumCPU(), c, false)
+p := parallel.NewVariableProcess(500 * time.Millisecond, 1, 2 * runtime.NumCPU(), c, false)
 
 // Execute 100 operations in parallel.
 p.Execute(100, func(i int) {
@@ -61,7 +61,7 @@ A variable process has four [probes](https://www.github.com/colinc86/probes) tha
 ```go
 // Create a variable process with probeController set to true.
 c := NewControllerConfiguration(2.0, 0.0, 1.0, 0.1, 1.0)
-p := parallel.NewVariableProcess(500 * time.Millisecond, 2 * runtime.NumCPU(), c, true)
+p := parallel.NewVariableProcess(500 * time.Millisecond, 1, 2 * runtime.NumCPU(), c, true)
 
 // Execute 100 operations in parallel.
 p.Execute(100, func(i int) {

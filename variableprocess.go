@@ -26,6 +26,10 @@ type VariableProcess struct {
 	// operations.
 	numRoutines int64
 
+	// The initial number of goroutines that should be used when Execute is
+	// called.
+	initialRoutines int
+
 	// The maximum number of goroutines to use when optimizing.
 	maxRoutines safeInt
 
@@ -70,9 +74,10 @@ type VariableProcess struct {
 
 // NewVariableProcess creates and returns a new parallel process with the
 // specified optimization interval.
-func NewVariableProcess(interval time.Duration, maxRoutines int, controllerConfiguration *ControllerConfiguration, probeController bool) *VariableProcess {
+func NewVariableProcess(interval time.Duration, initialRoutines int, maxRoutines int, controllerConfiguration *ControllerConfiguration, probeController bool) *VariableProcess {
 	p := &VariableProcess{
 		optimizationInterval: interval,
+		initialRoutines:      initialRoutines,
 		maxRoutines:          safeInt{value: maxRoutines},
 		reporter:             newReporter(),
 		controller:           newController(controllerConfiguration),
@@ -104,9 +109,12 @@ func (p *VariableProcess) Execute(iterations int, operation Operation) {
 	p.iterations = iterations
 	p.operation = operation
 	p.reset()
-	p.group.Add(1)
 
-	go p.runRoutine()
+	p.group.Add(p.initialRoutines)
+	for n := 0; n < p.initialRoutines; n++ {
+		go p.runRoutine()
+	}
+
 	go p.beginOptimizing()
 
 	p.group.Wait()
@@ -188,7 +196,7 @@ func (p *VariableProcess) reset() {
 		p.RoutineProbe.ClearSignal()
 	}
 
-	p.numRoutines = 1
+	p.numRoutines = int64(p.initialRoutines)
 	p.iteration.set(0)
 	p.numToRemove = 0
 	p.controller.reset()
