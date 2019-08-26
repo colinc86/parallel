@@ -37,6 +37,32 @@ func TestFixedProcessCompleteness_02(t *testing.T) {
 	}
 }
 
+func TestStopFixedProcess(t *testing.T) {
+	v := make([]float64, 1000000)
+	p := NewFixedProcess(2)
+	p.Execute(len(v), func(i int) {
+		if i == len(v)/2 {
+			p.Stop()
+		}
+
+		v[i] = float64(i + 1)
+	})
+
+	for i, value := range v {
+		if i <= len(v)/2 {
+			if float64(i+1) != value {
+				t.Errorf("Value, %f, should be equal to %f.", value, float64(i+1))
+				break
+			}
+		} else {
+			if value != 0.0 {
+				t.Errorf("Value, %f, should be equal to 0.0.", value)
+				break
+			}
+		}
+	}
+}
+
 // MARK: Benchmarks
 
 func BenchmarkFixedProcess_01(b *testing.B) {

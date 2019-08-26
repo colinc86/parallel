@@ -14,7 +14,10 @@ type FixedProcess struct {
 	group sync.WaitGroup
 
 	// The number of iterations in the current execution that have begun.
-	count safeInt
+	iteration safeInt
+
+	// The total number of iterations specified by the last call to Execute.
+	iterations int
 }
 
 // MARK: Initializers
@@ -29,15 +32,22 @@ func NewFixedProcess(numRoutines int) *FixedProcess {
 
 // MARK: Public methods
 
-// Execute executes the synced process for the specified number of operations.
+// Execute executes the fixed process for the specified number of operations.
 func (p *FixedProcess) Execute(iterations int, operation Operation) {
-	p.count.set(0)
+	p.iterations = iterations
+	p.iteration.set(0)
 	p.group.Add(p.numRoutines)
 	for n := 0; n < p.numRoutines; n++ {
-		go p.runRoutine(iterations, operation)
+		go p.runRoutine(operation)
 	}
 
 	p.group.Wait()
+}
+
+// Stop stops the fixed process after all of the current operations have
+// finished executing.
+func (p *FixedProcess) Stop() {
+	p.iteration.set(p.iterations)
 }
 
 // NumRoutines returns the number of routines that the synced processes was
@@ -48,12 +58,12 @@ func (p *FixedProcess) NumRoutines() int {
 
 // MARK: Private methods
 
-func (p *FixedProcess) runRoutine(iterations int, operation Operation) {
+func (p *FixedProcess) runRoutine(operation Operation) {
 	defer p.group.Done()
 
-	i := p.count.get()
-	for i < iterations {
+	i := p.iteration.get()
+	for i < p.iterations {
 		operation(i)
-		i = p.count.add(1)
+		i = p.iteration.add(1)
 	}
 }

@@ -1,5 +1,5 @@
 // Package parallel provides objects for executing parallel operations on either
-// a fixed of variable number of goroutines.
+// a fixed or variable number of goroutines.
 package parallel
 
 // Operation types represent a single operation in a parallel process.
@@ -13,6 +13,9 @@ type Process interface {
 	// Execute executes a parallel process for the given number of iterations
 	// using the provided operation function.
 	Execute(iterations int, operation Operation)
+
+	// Stop stops the process if it is currently executing.
+	Stop()
 
 	// NumRoutines returns the number of routines that are currently executing in
 	// the parallel process.
