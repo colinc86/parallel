@@ -12,6 +12,19 @@ import (
 // VariableProcess types execute a specified number of operations on a variable
 // number of goroutines.
 type VariableProcess struct {
+
+	// The CPU probe.
+	CPUProbe *probes.Probe
+
+	// The error probe.
+	ErrorProbe *probes.Probe
+
+	// The PID output probe.
+	PIDProbe *probes.Probe
+
+	// The routine probe.
+	RoutineProbe *probes.Probe
+
 	// The number of iterations between optimizations.
 	optimizationInterval time.Duration
 
@@ -56,18 +69,6 @@ type VariableProcess struct {
 
 	// Whether or not the controller should be probed.
 	probeController bool
-
-	// The CPU probe.
-	CPUProbe *probes.Probe
-
-	// The error probe.
-	ErrorProbe *probes.Probe
-
-	// The PID output probe.
-	PIDProbe *probes.Probe
-
-	// The routine probe.
-	RoutineProbe *probes.Probe
 }
 
 // MARK: Initializers
