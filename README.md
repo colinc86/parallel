@@ -1,5 +1,5 @@
 # parallel
-[![GoDoc](https://godoc.org/github.com/colinc86/parallel?status.svg)](https://godoc.org/github.com/colinc86/parallel)
+[![GoDoc](https://godoc.org/github.com/colinc86/parallel?status.svg)](https://godoc.org/github.com/colinc86/parallel) [![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fcolinc86%2Fparallel%2Fbadge&style=flat)](https://actions-badge.atrox.dev/colinc86/parallel/goto)
 
 A parallel processing package for Go.
 
