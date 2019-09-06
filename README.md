@@ -20,7 +20,7 @@ p.Execute(100, func (i int) {
 ```
 
 ### VariableProcess
-`VariableProcess` types execute their set of operations on a variable number of goroutines by utilizing a PID control loop to maximize CPU throughput. You configure the PID controller by creating a `ControllerConfiguration` struct and passing to the `NewVariableProcess` function.
+`VariableProcess` types execute their set of operations on a variable number of goroutines by utilizing a PID control loop to maximize CPU throughput. You configure the PID controller by creating a `ControllerConfiguration` struct and passing it to the `NewVariableProcess` function.
 
 ```go
 // Create a variable process with optimization interval, initial routine count,
@@ -34,7 +34,7 @@ p.Execute(100, func(i int) {
 })
 ```
 
-You can't change the number of goroutines directly in an variable process, but you can modify its optimization parameters while it's executing.
+You can't change the number of goroutines directly on a variable process, but you can modify its optimization parameters while it's executing.
 
 ```go
 // Execute the process on its own goroutine
