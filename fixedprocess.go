@@ -61,9 +61,9 @@ func (p *FixedProcess) NumRoutines() int {
 func (p *FixedProcess) runRoutine(operation Operation) {
 	defer p.group.Done()
 
-	i := p.iteration.get()
+	i := p.iteration.getAndAdd(1)
 	for i < p.iterations {
 		operation(i)
-		i = p.iteration.add(1)
+		i = p.iteration.getAndAdd(1)
 	}
 }

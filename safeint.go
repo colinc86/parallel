@@ -9,6 +9,15 @@ type safeInt struct {
 	mutex sync.Mutex
 }
 
+// getAndAdd gets the integer's value and then adds n to the value.
+func (s *safeInt) getAndAdd(n int) int {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	value := s.value
+	s.value += n
+	return value
+}
+
 // get gets the integer value.
 func (s *safeInt) get() int {
 	s.mutex.Lock()
